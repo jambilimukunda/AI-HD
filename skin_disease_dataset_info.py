@@ -120,3 +120,11 @@ history = model.fit(train_data, validation_data=val_data, epochs=10)
 model.save("skin_disease_model.h5")
 
 print("Model training complete and saved as skin_disease_model.h5")
+
+# Load and test model
+def test_model():
+    model = keras.models.load_model("skin_disease_model.h5")
+    loss, accuracy = model.evaluate(val_data)
+    print(f"Test Accuracy: {accuracy * 100:.2f}%")
+
+test_model()
