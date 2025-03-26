@@ -1,126 +1,122 @@
-"""
-Skin Disease Dataset Information
+import os
+import shutil
+import zipfile
+import requests
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+import numpy as np
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-This file provides information about recommended datasets for training the skin disease classification model.
+# Define dataset sources
+data_sources = {
+    "HAM10000": "https://dataverse.harvard.edu/api/access/datafile/3173980",
+    "Dermnet": "https://www.kaggle.com/datasets/shubhamgoel27/dermnet/download",
+    "ISIC": "https://www.isic-archive.com/",
+    "SD-198": "https://data.mendeley.com/datasets/zr7vgbcyr2/1/download",
+    "Skin-Diseases": "https://www.kaggle.com/datasets/ismailpromus/skin-diseases-image-dataset/download"
+}
 
-1. HAM10000 (Human Against Machine with 10000 training images) Dataset
-   - Contains 10,000+ dermatoscopic images of pigmented skin lesions
-   - 7 different classes of skin conditions
-   - Available at: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/DBW86T
-   - Paper: https://arxiv.org/abs/1803.10417
+# Create dataset directory
+os.makedirs("dataset", exist_ok=True)
 
-2. Dermnet Dataset
-   - Contains 23,000+ images of skin diseases
-   - 23 categories of skin diseases
-   - Available at: https://www.kaggle.com/datasets/shubhamgoel27/dermnet
-
-3. ISIC Archive (International Skin Imaging Collaboration)
-   - Large collection of dermoscopic images
-   - Regularly updated with new images
-   - Available at: https://www.isic-archive.com/
-
-4. SD-198 Dataset
-   - Contains 6,584 clinical images of 198 skin diseases
-   - Paper: https://arxiv.org/abs/1606.01258
-
-How to prepare the dataset:
-
-1. Download one of the datasets mentioned above
-2. Organize the dataset into the following structure:
-   
-   dataset/
-   ├── train/
-   │   ├── melanoma/
-   │   ├── eczema/
-   │   ├── psoriasis/
-   │   └── normal/
-   └── validation/
-       ├── melanoma/
-       ├── eczema/
-       ├── psoriasis/
-       └── normal/
-
-3. Preprocess the images:
-   - Resize to 224x224 pixels
-   - Normalize pixel values
-   - Apply data augmentation for training set
-
-4. Use the SkinDiseaseClassifier.train() method with the path to your dataset
-"""
-
-# Example code to download and prepare the HAM10000 dataset
-def download_ham10000():
-    """
-    Downloads and prepares the HAM10000 dataset.
-    This is a placeholder function - in a real implementation, you would:
-    1. Download the dataset from the source
-    2. Extract and organize the files
-    3. Split into train/validation sets
-    """
-    print("To download and prepare the HAM10000 dataset:")
-    print("1. Visit https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/DBW86T")
-    print("2. Download the dataset files")
-    print("3. Extract the files to a directory")
-    print("4. Use the following code to organize the dataset:")
+def download_and_extract(url, extract_to):
+    filename = url.split("/")[-1]
+    filepath = os.path.join("dataset", filename)
     
-    code_example = """
-    import os
-    import pandas as pd
-    import shutil
-    from sklearn.model_selection import train_test_split
+    if not os.path.exists(filepath):
+        print(f"Downloading {filename}...")
+        response = requests.get(url, stream=True)
+        with open(filepath, "wb") as f:
+            shutil.copyfileobj(response.raw, f)
+        print(f"Downloaded {filename}")
     
-    # Load metadata
-    metadata = pd.read_csv('HAM10000_metadata.csv')
+    # Extract the dataset
+    if zipfile.is_zipfile(filepath):
+        print(f"Extracting {filename}...")
+        with zipfile.ZipFile(filepath, "r") as zip_ref:
+            zip_ref.extractall(extract_to)
+        print(f"Extracted {filename}")
     
-    # Create directories
-    os.makedirs('dataset/train/melanoma', exist_ok=True)
-    os.makedirs('dataset/train/eczema', exist_ok=True)
-    os.makedirs('dataset/train/psoriasis', exist_ok=True)
-    os.makedirs('dataset/train/normal', exist_ok=True)
-    os.makedirs('dataset/validation/melanoma', exist_ok=True)
-    os.makedirs('dataset/validation/eczema', exist_ok=True)
-    os.makedirs('dataset/validation/psoriasis', exist_ok=True)
-    os.makedirs('dataset/validation/normal', exist_ok=True)
+# Download and extract datasets
+for name, url in data_sources.items():
+    download_and_extract(url, "dataset")
+
+# Organize dataset into train and validation sets
+def organize_dataset():
+    base_dir = "dataset/IMG_CLASSES"
+    train_dir = "dataset/train"
+    val_dir = "dataset/validation"
     
-    # Map HAM10000 diagnosis to our categories
-    diagnosis_map = {
-        'mel': 'melanoma',
-        'nv': 'normal',
-        'bcc': 'normal',
-        'akiec': 'normal',
-        'bkl': 'normal',
-        'df': 'normal',
-        'vasc': 'normal'
-    }
+    os.makedirs(train_dir, exist_ok=True)
+    os.makedirs(val_dir, exist_ok=True)
     
-    # Add custom mapping for eczema and psoriasis (not in HAM10000)
-    # In a real scenario, you would need additional datasets for these conditions
-    
-    # Split data into train and validation
-    train_df, val_df = train_test_split(metadata, test_size=0.2, random_state=42, stratify=metadata['dx'])
-    
-    # Copy images to appropriate directories
-    def copy_images(df, train_or_val):
-        for _, row in df.iterrows():
-            image_id = row['image_id']
-            diagnosis = diagnosis_map.get(row['dx'], 'normal')
+    for category in os.listdir(base_dir):
+        category_path = os.path.join(base_dir, category)
+        if os.path.isdir(category_path):
+            os.makedirs(os.path.join(train_dir, category), exist_ok=True)
+            os.makedirs(os.path.join(val_dir, category), exist_ok=True)
             
-            # Source path (adjust based on your download structure)
-            src_path = f'HAM10000_images/{image_id}.jpg'
+            images = os.listdir(category_path)
+            train_images, val_images = train_test_split(images, test_size=0.2, random_state=42)
             
-            # Destination path
-            dst_path = f'dataset/{train_or_val}/{diagnosis}/{image_id}.jpg'
-            
-            # Copy the file
-            if os.path.exists(src_path):
-                shutil.copy(src_path, dst_path)
-    
-    # Copy images to train and validation directories
-    copy_images(train_df, 'train')
-    copy_images(val_df, 'validation')
-    """
-    
-    print(code_example)
+            for img in train_images:
+                shutil.copy(os.path.join(category_path, img), os.path.join(train_dir, category, img))
+            for img in val_images:
+                shutil.copy(os.path.join(category_path, img), os.path.join(val_dir, category, img))
 
-if __name__ == "__main__":
-    download_ham10000()
+organize_dataset()
+
+# Prepare data
+image_size = (224, 224)
+batch_size = 32
+
+data_gen = ImageDataGenerator(
+    rescale=1./255,
+    validation_split=0.2,
+    rotation_range=20,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    horizontal_flip=True,
+)
+
+train_data = data_gen.flow_from_directory(
+    "dataset/train",
+    target_size=image_size,
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='training'
+)
+
+val_data = data_gen.flow_from_directory(
+    "dataset/validation",
+    target_size=image_size,
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='validation'
+)
+
+# Define model
+model = keras.Sequential([
+    layers.Conv2D(32, (3,3), activation='relu', input_shape=(224, 224, 3)),
+    layers.MaxPooling2D(2,2),
+    layers.Conv2D(64, (3,3), activation='relu'),
+    layers.MaxPooling2D(2,2),
+    layers.Conv2D(128, (3,3), activation='relu'),
+    layers.MaxPooling2D(2,2),
+    layers.Flatten(),
+    layers.Dense(512, activation='relu'),
+    layers.Dense(len(train_data.class_indices), activation='softmax')
+])
+
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+# Train model
+history = model.fit(train_data, validation_data=val_data, epochs=10)
+
+# Save model
+model.save("skin_disease_model.h5")
+
+print("Model training complete and saved as skin_disease_model.h5")
